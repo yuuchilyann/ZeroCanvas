@@ -16,6 +16,7 @@ export interface UseDrawingReturn {
   onPointerDown: (e: React.PointerEvent<HTMLCanvasElement>) => void;
   onPointerMove: (e: React.PointerEvent<HTMLCanvasElement>) => void;
   onPointerUp: (e: React.PointerEvent<HTMLCanvasElement>) => void;
+  onPointerCancel: () => void;
   // Apply an incoming DrawMessage onto the static canvas
   applyMessage: (msg: DrawMessage, staticCanvas: HTMLCanvasElement) => void;
   // Clear both canvases
@@ -49,12 +50,11 @@ function catmullRomPoint(
 }
 
 // Returns normalized (0-1) coordinates — device/size independent
-function getCanvasPoint(e: React.PointerEvent<HTMLCanvasElement>): Point {
-  const rect = e.currentTarget.getBoundingClientRect();
+function getCanvasPoint(clientX: number, clientY: number, pressure: number, rect: DOMRect): Point {
   return {
-    x: (e.clientX - rect.left) / rect.width,
-    y: (e.clientY - rect.top) / rect.height,
-    pressure: e.pressure ?? 0.5,
+    x: (clientX - rect.left) / rect.width,
+    y: (clientY - rect.top) / rect.height,
+    pressure: pressure ?? 0.5,
   };
 }
 
@@ -136,13 +136,14 @@ export function useDrawing({ onStrokeMessage, staticCanvasRef }: UseDrawingOptio
     if (pendingBatchRef.current.length === 0) return;
     const pts = pendingBatchRef.current.splice(0);
     onStrokeMessage?.({ type: 'stroke_move', points: pts });
-    currentPointsRef.current.push(...pts);
+    // Note: currentPointsRef is updated immediately in onPointerMove for local rendering
   }, [onStrokeMessage]);
 
   const onPointerDown = useCallback(
     (e: React.PointerEvent<HTMLCanvasElement>) => {
       e.currentTarget.setPointerCapture(e.pointerId);
-      const point = getCanvasPoint(e);
+      const rect = e.currentTarget.getBoundingClientRect();
+      const point = getCanvasPoint(e.clientX, e.clientY, e.pressure, rect);
       isDrawingRef.current = true;
 
       const tool = styleRef.current.tool;
@@ -161,15 +162,24 @@ export function useDrawing({ onStrokeMessage, staticCanvasRef }: UseDrawingOptio
   const onPointerMove = useCallback(
     (e: React.PointerEvent<HTMLCanvasElement>) => {
       if (!isDrawingRef.current) return;
-      const point = getCanvasPoint(e);
       const tool = styleRef.current.tool;
+      const canvas = e.currentTarget;
+      const rect = canvas.getBoundingClientRect();
 
       if (tool === 'line' || tool === 'rect') {
-        shapeEndRef.current = point;
+        shapeEndRef.current = getCanvasPoint(e.clientX, e.clientY, e.pressure, rect);
         return;
       }
 
-      pendingBatchRef.current.push(point);
+      // Use coalesced events for smoother Apple Pencil / stylus tracking
+      const coalescedEvents = e.nativeEvent.getCoalescedEvents?.() ?? [e.nativeEvent];
+      for (const ce of coalescedEvents) {
+        const point = getCanvasPoint(ce.clientX, ce.clientY, ce.pressure, rect);
+        // Push immediately to currentPointsRef so renderOverlay reflects it without delay
+        currentPointsRef.current.push(point);
+        pendingBatchRef.current.push(point);
+      }
+
       if (!batchTimerRef.current) {
         batchTimerRef.current = setTimeout(() => {
           batchTimerRef.current = null;
@@ -180,11 +190,25 @@ export function useDrawing({ onStrokeMessage, staticCanvasRef }: UseDrawingOptio
     [flushBatch]
   );
 
+  const onPointerCancel = useCallback(() => {
+    // Reset all drawing state when the pointer is cancelled (e.g. system intercepts touch)
+    isDrawingRef.current = false;
+    currentPointsRef.current = [];
+    pendingBatchRef.current = [];
+    shapeStartRef.current = null;
+    shapeEndRef.current = null;
+    if (batchTimerRef.current) {
+      clearTimeout(batchTimerRef.current);
+      batchTimerRef.current = null;
+    }
+  }, []);
+
   const onPointerUp = useCallback(
     (e: React.PointerEvent<HTMLCanvasElement>) => {
       if (!isDrawingRef.current) return;
       isDrawingRef.current = false;
-      const point = getCanvasPoint(e);
+      const rect = e.currentTarget.getBoundingClientRect();
+      const point = getCanvasPoint(e.clientX, e.clientY, e.pressure, rect);
       const tool = styleRef.current.tool;
       const staticCanvas = staticCanvasRefRef.current?.current ?? null;
 
@@ -314,6 +338,7 @@ export function useDrawing({ onStrokeMessage, staticCanvasRef }: UseDrawingOptio
     onPointerDown,
     onPointerMove,
     onPointerUp,
+    onPointerCancel,
     applyMessage,
     clearCanvas,
     renderOverlay,

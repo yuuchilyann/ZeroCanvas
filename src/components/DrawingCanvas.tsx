@@ -66,6 +66,19 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = ({
     });
   }, [drawing, onClear]);
 
+  // Prevent Safari/iPad from intercepting touch/pointer events as scroll gestures
+  useEffect(() => {
+    const canvas = overlayRef.current;
+    if (!canvas || readOnly) return;
+    const prevent = (e: Event) => e.preventDefault();
+    canvas.addEventListener('touchstart', prevent, { passive: false });
+    canvas.addEventListener('touchmove', prevent, { passive: false });
+    return () => {
+      canvas.removeEventListener('touchstart', prevent);
+      canvas.removeEventListener('touchmove', prevent);
+    };
+  }, [readOnly]);
+
   // Resize observer — save/restore static canvas content across resize (fullscreen etc.)
   useEffect(() => {
     const obs = new ResizeObserver(() => {
@@ -132,6 +145,8 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = ({
         onPointerDown={readOnly ? undefined : drawing.onPointerDown}
         onPointerMove={readOnly ? undefined : drawing.onPointerMove}
         onPointerUp={readOnly ? undefined : drawing.onPointerUp}
+        onPointerCancel={readOnly ? undefined : drawing.onPointerCancel}
+        onPointerLeave={readOnly ? undefined : drawing.onPointerCancel}
       />
     </Box>
   );
