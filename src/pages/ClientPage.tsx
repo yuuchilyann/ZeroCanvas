@@ -39,12 +39,10 @@ function ClientBoard({ roomId }: { roomId: string }) {
     prevStateRef.current = connectionState;
   }, [connectionState, broadcastMessage]);
 
-  // Apply incoming snapshot from host
+  // Apply all incoming messages relayed from Host (other clients' strokes + snapshot)
   useEffect(() => {
     setOnMessage((msg) => {
-      if (msg.type === 'snapshot') {
-        applyRef.current?.(msg);
-      }
+      applyRef.current?.(msg);
     });
   }, [setOnMessage]);
 

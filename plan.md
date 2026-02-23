@@ -23,10 +23,10 @@
 | 模組 | 狀態 |
 |------|------|
 | A. PeerJS 連線核心 | ✅ 完成 |
-| B. Canvas 繪圖引擎 | ✅ 完成（含座標正規化修正）|
-| C. 同步協議設計 | ✅ 完成 |
+| B. Canvas 繪圖引擎 | ✅ 完成（含座標正規化修正、iPad 手寫筆延遲修正）|
+| C. 同步協議設計 | ✅ 完成（含多 Client 互相同步）|
 | D. 顯示模式 Host/Client UI | ✅ 完成 |
-| Bug 修正（4 項） | ✅ 全部修正 |
+| Bug 修正（6 項） | ✅ 全部修正 |
 | E. UX 最佳化與部署 | ⏳ 待實作 |
 
 ---
@@ -247,7 +247,30 @@ ResizeObserver 回呼改為三步驟：
 
 ---
 
-### Bug 4 — 跨裝置座標偏移與圖像變形（已修正）
+### Bug 5 — iPad Apple Pencil 手寫延遲/卡頓（已修正）
+**根本原因**：
+- `currentPointsRef` 在 16ms 批次計時器觸發後才更新，overlay 渲染跟著延遲
+- 缺少 `onPointerCancel`，Safari 嘗試判斷捲動手勢取消後狀態卡住
+- 未使用 `getCoalescedEvents()`，Apple Pencil 中間位置遺失
+- `touchstart`/`touchmove` 未阻止，Safari 系統手勢介入
+
+**修正內容**：
+- `onPointerMove` 立即將點寫入 `currentPointsRef`（不等計時器），16ms 批次僅用於網路傳輸
+- 使用 `e.nativeEvent.getCoalescedEvents()` 捕捉 Apple Pencil 所有中間位置
+- 新增 `onPointerCancel` / `onPointerLeave` 重置繪圖狀態
+- Canvas 上以 `{ passive: false }` 監聽 `touchstart`/`touchmove` 並 `preventDefault()`
+
+---
+
+### Bug 6 — 多 Client 繪圖端無法互看對方內容（已修正）
+**根本原因**：
+- Host `handleMessage` 收到 Client A 的繪圖事件後只套用到自身 canvas，未轉發給其他 Client
+- Client 的 `setOnMessage` 只處理 `snapshot` 型別，忽略其他繪圖訊息
+
+**修正內容**：
+- `SyncService` 新增 `relayToOthers(msg, excludePeerId, allPeerIds)`，對所有非發送者的 Client 逐一呼叫 `send()`
+- `HostPage.handleMessage`：套用 canvas 後呼叫 `relayToOthers`，`connectedClients` 以 ref 追蹤避免 stale closure
+- `ClientPage.setOnMessage`：改為接收並 `applyMessage` 所有訊息型別（stroke_start/move/end、clear、snapshot）
 **根本原因**：
 繪圖座標以**絕對 canvas 像素**（`clientX × DPR`）傳送。不同裝置 canvas 尺寸不同（平板 vs 投影機），接收端直接使用相同絕對座標繪製，造成位置錯誤；視窗 resize 後問題加劇。
 

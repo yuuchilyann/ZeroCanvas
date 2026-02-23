@@ -47,6 +47,13 @@ export class SyncService {
     if (dataUrl) this.sendSnapshot(dataUrl, fromPeerId);
   }
 
+  /** Host → all other clients: relay a draw event, excluding the original sender */
+  relayToOthers(msg: DrawMessage, excludePeerId: string, allPeerIds: string[]) {
+    allPeerIds.forEach((id) => {
+      if (id !== excludePeerId) this.send(msg, id);
+    });
+  }
+
   /** Deserialize and validate an incoming message */
   static parse(raw: unknown): DrawMessage | null {
     if (typeof raw !== 'object' || raw === null) return null;

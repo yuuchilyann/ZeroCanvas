@@ -19,6 +19,10 @@ function HostBoard() {
   const { roomId, connectionState, connectedClients, sendMessage, broadcastMessage } =
     usePeerContext();
 
+  // Stable ref so handleMessage closure never goes stale
+  const connectedClientsRef = useRef(connectedClients);
+  connectedClientsRef.current = connectedClients;
+
   const syncRef = useRef<SyncService>(new SyncService(sendMessage, broadcastMessage));
   const applyRef = useRef<((msg: DrawMessage) => void) | null>(null);
   const getDataUrlRef = useRef<(() => string) | null>(null);
@@ -45,7 +49,10 @@ function HostBoard() {
         );
         return;
       }
+      // Apply to Host canvas
       applyRef.current?.(parsed);
+      // Relay to all other connected clients (excluding the sender)
+      syncRef.current.relayToOthers(parsed, fromPeerId, connectedClientsRef.current);
     },
     []
   );
