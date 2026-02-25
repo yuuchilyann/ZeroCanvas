@@ -13,6 +13,7 @@ import AutoFixHighIcon from '@mui/icons-material/AutoFixHigh';
 import CleaningServicesIcon from '@mui/icons-material/CleaningServices';
 import HorizontalRuleIcon from '@mui/icons-material/HorizontalRule';
 import CropSquareIcon from '@mui/icons-material/CropSquare';
+import HighlightAltIcon from '@mui/icons-material/HighlightAlt';
 import DeleteForeverIcon from '@mui/icons-material/DeleteForever';
 import DownloadIcon from '@mui/icons-material/Download';
 import type { Tool } from '../types/drawing';
@@ -85,6 +86,9 @@ const Toolbar: React.FC<ToolbarProps> = ({
         </Tooltip>
         <Tooltip title="矩形" placement={isVertical ? 'right' : 'bottom'}>
           <ToggleButton value="rect"><CropSquareIcon /></ToggleButton>
+        </Tooltip>
+        <Tooltip title="圈選移動" placement={isVertical ? 'right' : 'bottom'}>
+          <ToggleButton value="select"><HighlightAltIcon /></ToggleButton>
         </Tooltip>
       </ToggleButtonGroup>
 

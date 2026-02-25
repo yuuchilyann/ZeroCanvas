@@ -55,7 +55,8 @@ function HostBoard() {
       if (!parsed) return;
       if (parsed.type === 'snapshot_request') {
         const strokes = internalHookRef.current?.getStrokes() ?? [];
-        sendMessage({ type: 'sync_strokes', strokes }, fromPeerId);
+        const images = internalHookRef.current?.getImages() ?? [];
+        sendMessage({ type: 'sync_strokes', strokes, images }, fromPeerId);
         return;
       }
       // Apply to Host canvas

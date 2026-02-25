@@ -29,6 +29,7 @@
 | Bug 修正（6 項） | ✅ 全部修正 |
 | E. UX 最佳化與部署 | ⏳ 部分完成（PWA Manifest、錯誤處理 UI）|
 | F. 功能增強與修正（5 項） | ✅ 完成（F1~F5 全部實作）|
+| G. 圖片貼上與物件圈選移動 | ✅ 完成（G1 貼上圖片、G2 圈選移動）|
 
 ---
 
@@ -275,6 +276,42 @@ src/
 - [x] 圓圈樣式：空心圓、半透明填充，讓使用者精確對位
 - [x] 非橡皮擦工具維持原有 `crosshair` 游標
 - [x] 涉及檔案：`src/components/DrawingCanvas.tsx`、`src/hooks/useDrawing.ts`
+
+---
+
+## G. 圖片貼上與物件圈選移動 ✅
+
+**目的**：讓使用者能從剪貼簿貼上圖片至畫布，並能透過圈選方式移動已有的筆跡與圖片物件。
+
+### G1. 貼上剪貼簿圖片（Paste Image）
+
+**問題**：使用者無法將螢幕截圖或其他圖片素材放入白板，限制了教學與筆記的靈活度。
+
+**實作方向**：
+- [x] 監聽 `paste` 事件（document level），偵測剪貼簿中的圖片（`clipboardData.items` 中 type 為 `image/*` 的項目）
+- [x] 讀取圖片為 Data URL，建立 `ImageObject { id, src, x, y, width, height }` 結構（世界座標）
+- [x] 貼上後進入**擺放模式**：圖片以半透明預覽顯示在 overlay canvas 上，跟隨指標/觸控位置移動
+- [x] 使用者點擊/觸碰畫布後，圖片**固定**至該位置，寫入物件模型並繪製到 static canvas
+- [x] 按 `Escape` 或切換工具可取消擺放
+- [x] 圖片座標使用世界座標系統，與筆跡一致，支援 viewport 滾動後正確顯示
+- [x] 同步協議擴充：新增 `image_add { imageId, src, x, y, width, height }` 訊息，通知其他端新增圖片
+- [x] `redrawStatic` 與 `getFullSnapshot` 需同時繪製 `ImageObject` 陣列中的圖片
+- [x] 涉及檔案：`src/types/drawing.ts`、`src/hooks/useDrawing.ts`、`src/components/DrawingCanvas.tsx`、`src/services/syncService.ts`
+
+### G2. 圈選物件並移動（Select & Move）
+
+**問題**：已繪製的筆跡與圖片無法重新排列位置，使用者只能擦除重畫。
+
+**實作方向**：
+- [x] 新增 `'select'` 工具至 `Tool` 類型，Toolbar 加入圈選按鈕（使用 `HighlightAlt` 或 `SelectAll` icon）
+- [x] 選取工具啟用時，使用者拖曳繪製**選取矩形**（虛線框，顯示於 overlay canvas）
+- [x] 放開後，計算哪些 `StrokeObject` 和 `ImageObject` 的包圍盒（bounding box）與選取矩形相交，標記為「已選取」
+- [x] 已選取物件以**高亮虛線包圍盒**顯示，進入**移動模式**
+- [x] 移動模式中，使用者拖曳可移動整組選取物件（overlay 預覽），放開後**固定**至新位置
+- [x] 固定時更新所有選取筆跡的 `points[]` 座標（加上 delta），更新圖片的 `x, y`，重繪 static canvas
+- [x] 同步協議擴充：新增 `objects_move { objectIds[], deltaX, deltaY }` 訊息，通知其他端移動對應物件
+- [x] 點擊空白處或按 `Escape` 取消選取
+- [x] 涉及檔案：`src/types/drawing.ts`、`src/hooks/useDrawing.ts`、`src/components/DrawingCanvas.tsx`、`src/components/Toolbar.tsx`、`src/services/syncService.ts`
 
 ---
 

@@ -195,13 +195,50 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = ({
     touchAction: 'none',
   };
 
-  // Eraser: dynamic circle cursor; other tools: crosshair
-  const eraserCursor = useMemo(() => {
+  // Clipboard paste → image placement
+  useEffect(() => {
+    if (readOnly) return;
+    const handlePaste = (e: ClipboardEvent) => {
+      const items = e.clipboardData?.items;
+      if (!items) return;
+      for (const item of Array.from(items)) {
+        if (item.type.startsWith('image/')) {
+          e.preventDefault();
+          const blob = item.getAsFile();
+          if (!blob) continue;
+          const reader = new FileReader();
+          reader.onload = () => {
+            const dataUrl = reader.result as string;
+            drawingRef.current.handlePasteImage(dataUrl);
+          };
+          reader.readAsDataURL(blob);
+          break;
+        }
+      }
+    };
+    document.addEventListener('paste', handlePaste);
+    return () => document.removeEventListener('paste', handlePaste);
+  }, [readOnly]);
+
+  // Escape key → cancel pending image / selection
+  useEffect(() => {
+    if (readOnly) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') drawingRef.current.cancelPendingAction();
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [readOnly]);
+
+  // Cursor: eraser circle, pending image grab, select crosshair, or default crosshair
+  const canvasCursor = useMemo(() => {
     if (readOnly) return 'default';
+    if (drawing.hasPendingImage) return 'grab';
+    if (drawing.style.tool === 'select') return 'crosshair';
     if (drawing.style.tool === 'eraser' || drawing.style.tool === 'pixel_eraser')
       return makeEraserCursor(drawing.style.width);
     return 'crosshair';
-  }, [readOnly, drawing.style.tool, drawing.style.width]);
+  }, [readOnly, drawing.style.tool, drawing.style.width, drawing.hasPendingImage]);
 
   return (
     <Box sx={{ position: 'relative', width: '100%', height: '100%', bgcolor: '#ffffff' }}>
@@ -212,7 +249,7 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = ({
         ref={overlayRef}
         style={{
           ...commonCanvasStyle,
-          cursor: readOnly ? 'default' : eraserCursor,
+          cursor: readOnly ? 'default' : canvasCursor,
         }}
         onPointerDown={readOnly ? undefined : drawing.onPointerDown}
         onPointerMove={readOnly ? undefined : drawing.onPointerMove}
