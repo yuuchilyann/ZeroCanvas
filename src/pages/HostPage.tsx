@@ -79,6 +79,15 @@ function HostBoard() {
     syncRef.current.sendDraw(msg);
   }, []);
 
+  const handleSave = useCallback(() => {
+    const dataUrl = getDataUrlRef.current?.();
+    if (!dataUrl) return;
+    const a = document.createElement('a');
+    a.href = dataUrl;
+    a.download = `zerocanvas-${Date.now()}.png`;
+    a.click();
+  }, []);
+
   const handleClear = useCallback(() => {
     clearFnRef.current?.();
     syncRef.current.sendDraw({ type: 'clear' });
@@ -222,6 +231,7 @@ function HostBoard() {
             onColorChange={handleColorChange}
             onWidthChange={handleWidthChange}
             onClear={handleClear}
+            onSave={handleSave}
             orientation="vertical"
           />
         </Box>

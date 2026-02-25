@@ -23,6 +23,8 @@ export interface UseDrawingReturn {
   scrollBy: (deltaY: number) => void;
   /** Redraw the static canvas from stroke objects at current viewport */
   redrawStatic: (canvas: HTMLCanvasElement) => void;
+  /** Render all strokes across full vertical extent and return a white-background PNG data URL */
+  getFullSnapshot: (screenCanvas: HTMLCanvasElement) => string;
 }
 
 let _strokeCounter = 0;
@@ -521,6 +523,54 @@ export function useDrawing({ onStrokeMessage, staticCanvasRef }: UseDrawingOptio
     []
   );
 
+  const getFullSnapshot = useCallback(
+    (screenCanvas: HTMLCanvasElement): string => {
+      const strokes = strokesRef.current;
+      const screenW = screenCanvas.width;
+      const screenH = screenCanvas.height;
+      const tmp = document.createElement('canvas');
+      const ctx = tmp.getContext('2d')!;
+
+      if (strokes.length === 0) {
+        // No stroke objects (blank canvas or raster-only snapshot) — composite current view with white bg
+        tmp.width = screenW;
+        tmp.height = screenH;
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, screenW, screenH);
+        ctx.drawImage(screenCanvas, 0, 0);
+        return tmp.toDataURL('image/png');
+      }
+
+      // Find the vertical extent of all strokes in world-space units
+      let maxWorldY = 1;
+      for (const s of strokes) {
+        for (const p of s.points) {
+          if (p.y > maxWorldY) maxWorldY = p.y;
+        }
+      }
+      maxWorldY += 0.05; // small bottom padding
+
+      // Full canvas: same width, taller by the world extent
+      tmp.width = screenW;
+      tmp.height = Math.ceil(maxWorldY * screenH);
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, tmp.width, tmp.height);
+
+      // Render all strokes using screen dimensions as the coordinate scale unit.
+      // renderStroke maps: canvasX = point.x * canvas.width
+      //                    canvasY = (point.y - viewportOffsetY) * canvas.height
+      // By passing a virtual canvas with screenW/screenH and viewportOffsetY=0,
+      // each stroke is placed at its absolute pixel position in world space.
+      const vCanvas = { width: screenW, height: screenH } as unknown as HTMLCanvasElement;
+      for (const s of strokes) {
+        renderStroke(ctx, s, vCanvas, 0);
+      }
+
+      return tmp.toDataURL('image/png');
+    },
+    []
+  );
+
   return {
     style,
     viewportOffsetY,
@@ -536,5 +586,6 @@ export function useDrawing({ onStrokeMessage, staticCanvasRef }: UseDrawingOptio
     renderOverlay,
     scrollBy,
     redrawStatic,
+    getFullSnapshot,
   };
 }

@@ -15,6 +15,7 @@ function ClientBoard({ roomId }: { roomId: string }) {
   const syncRef = useRef<SyncService>(new SyncService(sendMessage, broadcastMessage));
   const clearFnRef = useRef<(() => void) | null>(null);
   const applyRef = useRef<((msg: DrawMessage) => void) | null>(null);
+  const getDataUrlRef = useRef<(() => string) | null>(null);
 
   // Ref to the canvas's internal drawing hook — updated every render via onDrawingHook
   const internalHookRef = useRef<ReturnType<typeof useDrawing> | null>(null);
@@ -49,6 +50,15 @@ function ClientBoard({ roomId }: { roomId: string }) {
   const handleClear = useCallback(() => {
     clearFnRef.current?.();
     syncRef.current.sendDraw({ type: 'clear' });
+  }, []);
+
+  const handleSave = useCallback(() => {
+    const dataUrl = getDataUrlRef.current?.();
+    if (!dataUrl) return;
+    const a = document.createElement('a');
+    a.href = dataUrl;
+    a.download = `zerocanvas-${Date.now()}.png`;
+    a.click();
   }, []);
 
   // Toolbar handlers: update local state AND call into canvas's internal hook
@@ -91,6 +101,7 @@ function ClientBoard({ roomId }: { roomId: string }) {
         <DrawingCanvas
           onMessage={(msg) => syncRef.current.sendDraw(msg)}
           onApplyMessage={(fn) => { applyRef.current = fn; }}
+          onSnapshot={(fn) => { getDataUrlRef.current = fn; }}
           onClear={(fn) => { clearFnRef.current = fn; }}
           // Store canvas's internal hook in ref; no state update so no extra re-render
           onDrawingHook={(hook) => { internalHookRef.current = hook; }}
@@ -111,6 +122,7 @@ function ClientBoard({ roomId }: { roomId: string }) {
             onColorChange={handleColorChange}
             onWidthChange={handleWidthChange}
             onClear={handleClear}
+            onSave={handleSave}
             orientation="vertical"
           />
         </Box>

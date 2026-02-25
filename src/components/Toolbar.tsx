@@ -14,6 +14,7 @@ import CleaningServicesIcon from '@mui/icons-material/CleaningServices';
 import HorizontalRuleIcon from '@mui/icons-material/HorizontalRule';
 import CropSquareIcon from '@mui/icons-material/CropSquare';
 import DeleteForeverIcon from '@mui/icons-material/DeleteForever';
+import DownloadIcon from '@mui/icons-material/Download';
 import type { Tool } from '../types/drawing';
 
 const PRESET_COLORS = [
@@ -29,6 +30,7 @@ interface ToolbarProps {
   onColorChange: (color: string) => void;
   onWidthChange: (width: number) => void;
   onClear: () => void;
+  onSave?: () => void;
   orientation?: 'horizontal' | 'vertical';
 }
 
@@ -40,6 +42,7 @@ const Toolbar: React.FC<ToolbarProps> = ({
   onColorChange,
   onWidthChange,
   onClear,
+  onSave,
   orientation = 'vertical',
 }) => {
   const [colorAnchor, setColorAnchor] = useState<HTMLElement | null>(null);
@@ -157,6 +160,15 @@ const Toolbar: React.FC<ToolbarProps> = ({
           <DeleteForeverIcon />
         </IconButton>
       </Tooltip>
+
+      {/* Save / Download */}
+      {onSave && (
+        <Tooltip title="儲存畫布" placement={isVertical ? 'right' : 'bottom'}>
+          <IconButton size="small" color="primary" onClick={onSave}>
+            <DownloadIcon />
+          </IconButton>
+        </Tooltip>
+      )}
     </Box>
   );
 };

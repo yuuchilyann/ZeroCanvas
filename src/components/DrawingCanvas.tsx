@@ -67,10 +67,14 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = ({
     });
   }, [onApplyMessage]);
 
-  // Expose getDataUrl to parent
+  // Expose getDataUrl (full vertical extent) to parent
   useEffect(() => {
     if (!onSnapshot) return;
-    onSnapshot(() => staticRef.current?.toDataURL('image/png') ?? '');
+    onSnapshot(() => {
+      const canvas = staticRef.current;
+      if (!canvas) return '';
+      return drawingRef.current.getFullSnapshot(canvas);
+    });
   }, [onSnapshot]);
 
   // Expose clear to parent
