@@ -25,6 +25,8 @@ export interface UseDrawingReturn {
   redrawStatic: (canvas: HTMLCanvasElement) => void;
   /** Render all strokes across full vertical extent and return a white-background PNG data URL */
   getFullSnapshot: (screenCanvas: HTMLCanvasElement) => string;
+  /** Return a copy of the current stroke objects for sync */
+  getStrokes: () => StrokeObject[];
 }
 
 let _strokeCounter = 0;
@@ -481,10 +483,20 @@ export function useDrawing({ onStrokeMessage, staticCanvasRef }: UseDrawingOptio
           break;
         case 'snapshot': {
           const img = new Image();
-          img.onload = () => ctx.drawImage(img, 0, 0, staticCanvas.width, staticCanvas.height);
+          img.onload = () => {
+            // Scale to match canvas width, preserving aspect ratio
+            const scale = staticCanvas.width / img.naturalWidth;
+            ctx.drawImage(img, 0, 0, img.naturalWidth, img.naturalHeight,
+              0, 0, staticCanvas.width, img.naturalHeight * scale);
+          };
           img.src = msg.dataUrl;
           // Snapshot replaces stroke history (cannot reconstruct objects from raster)
           strokesRef.current = [];
+          break;
+        }
+        case 'sync_strokes': {
+          strokesRef.current = msg.strokes;
+          redrawAll(strokesRef.current, staticCanvas, viewportOffsetYRef.current);
           break;
         }
         default:
@@ -571,6 +583,11 @@ export function useDrawing({ onStrokeMessage, staticCanvasRef }: UseDrawingOptio
     []
   );
 
+  const getStrokes = useCallback(
+    (): StrokeObject[] => [...strokesRef.current],
+    []
+  );
+
   return {
     style,
     viewportOffsetY,
@@ -587,5 +604,6 @@ export function useDrawing({ onStrokeMessage, staticCanvasRef }: UseDrawingOptio
     scrollBy,
     redrawStatic,
     getFullSnapshot,
+    getStrokes,
   };
 }

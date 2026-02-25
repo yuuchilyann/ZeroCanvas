@@ -54,10 +54,8 @@ function HostBoard() {
       const parsed = SyncService.parse(msg);
       if (!parsed) return;
       if (parsed.type === 'snapshot_request') {
-        syncRef.current.handleSnapshotRequest(
-          () => getDataUrlRef.current?.() ?? '',
-          fromPeerId
-        );
+        const strokes = internalHookRef.current?.getStrokes() ?? [];
+        sendMessage({ type: 'sync_strokes', strokes }, fromPeerId);
         return;
       }
       // Apply to Host canvas

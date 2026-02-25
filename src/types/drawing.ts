@@ -33,4 +33,5 @@ export type DrawMessage =
   | { type: 'stroke_delete'; strokeId: string }
   | { type: 'clear' }
   | { type: 'snapshot_request' }
-  | { type: 'snapshot'; dataUrl: string };
+  | { type: 'snapshot'; dataUrl: string }
+  | { type: 'sync_strokes'; strokes: StrokeObject[] };
