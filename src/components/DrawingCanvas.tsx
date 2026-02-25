@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useCallback } from 'react';
+import React, { useEffect, useRef, useCallback, useMemo } from 'react';
 import { Box } from '@mui/material';
 import type { DrawMessage } from '../types/drawing';
 import { useDrawing, type UseDrawingOptions } from '../hooks/useDrawing';
@@ -10,6 +10,18 @@ interface DrawingCanvasProps {
   onSnapshot?: (getDataUrl: () => string) => void;
   onClear?: (clear: () => void) => void;
   onDrawingHook?: (hook: ReturnType<typeof useDrawing>) => void;
+}
+
+/** Generate a circle cursor data-URL for the eraser tool */
+function makeEraserCursor(size: number): string {
+  const r = Math.max(size / 2, 4);
+  const d = Math.ceil(r * 2 + 2);
+  const c = d / 2;
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${d}" height="${d}">` +
+    `<circle cx="${c}" cy="${c}" r="${r}" fill="none" stroke="rgba(0,0,0,0.6)" stroke-width="1.5"/>` +
+    `<circle cx="${c}" cy="${c}" r="${r}" fill="none" stroke="rgba(255,255,255,0.6)" stroke-width="0.5"/>` +
+    `</svg>`;
+  return `url("data:image/svg+xml,${encodeURIComponent(svg)}") ${c} ${c}, crosshair`;
 }
 
 function resizeCanvas(canvas: HTMLCanvasElement) {
@@ -69,44 +81,58 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = ({
   // Prevent Safari/iPad from intercepting touch/pointer events as scroll gestures
   useEffect(() => {
     const canvas = overlayRef.current;
-    if (!canvas || readOnly) return;
+    if (!canvas) return;
+
+    // Wheel event for vertical scrolling (all modes — host read-only can scroll too)
+    const handleWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      // Convert pixel delta to world units (1.0 = one screen height)
+      const rect = canvas.getBoundingClientRect();
+      const delta = e.deltaY / (rect.height || 1);
+      drawing.scrollBy(delta);
+    };
+    canvas.addEventListener('wheel', handleWheel, { passive: false });
+
+    if (readOnly) {
+      return () => {
+        canvas.removeEventListener('wheel', handleWheel);
+      };
+    }
+
     const prevent = (e: Event) => e.preventDefault();
     canvas.addEventListener('touchstart', prevent, { passive: false });
     canvas.addEventListener('touchmove', prevent, { passive: false });
     return () => {
+      canvas.removeEventListener('wheel', handleWheel);
       canvas.removeEventListener('touchstart', prevent);
       canvas.removeEventListener('touchmove', prevent);
     };
-  }, [readOnly]);
+  }, [readOnly, drawing]);
 
-  // Resize observer — save/restore static canvas content across resize (fullscreen etc.)
+  // Redraw static canvas from stroke objects when viewport scrolls
+  const prevOffsetRef = useRef(drawing.viewportOffsetY);
+  useEffect(() => {
+    if (prevOffsetRef.current !== drawing.viewportOffsetY) {
+      prevOffsetRef.current = drawing.viewportOffsetY;
+      if (staticRef.current) drawing.redrawStatic(staticRef.current);
+    }
+  }, [drawing, drawing.viewportOffsetY]);
+
+  // Resize observer — resize canvases and redraw from stroke objects
   useEffect(() => {
     const obs = new ResizeObserver(() => {
       const staticCanvas = staticRef.current;
 
-      // 1. Snapshot existing content before dimensions reset
-      let snapshot: string | null = null;
-      if (staticCanvas && staticCanvas.width > 0 && staticCanvas.height > 0) {
-        snapshot = staticCanvas.toDataURL();
-      }
-
-      // 2. Resize both canvases (clears them)
+      // Resize both canvases (clears them)
       if (staticCanvas) resizeCanvas(staticCanvas);
       if (overlayRef.current) resizeCanvas(overlayRef.current);
 
-      // 3. Restore static canvas content scaled to new dimensions
-      if (staticCanvas && snapshot) {
-        const ctx = staticCanvas.getContext('2d');
-        if (ctx) {
-          const img = new Image();
-          img.onload = () => ctx.drawImage(img, 0, 0, staticCanvas.width, staticCanvas.height);
-          img.src = snapshot;
-        }
-      }
+      // Redraw from stroke objects at current viewport
+      if (staticCanvas) drawing.redrawStatic(staticCanvas);
     });
     if (staticRef.current) obs.observe(staticRef.current);
     return () => obs.disconnect();
-  }, []);
+  }, [drawing]);
 
   // Animation loop for overlay
   const tick = useCallback(() => {
@@ -130,17 +156,23 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = ({
     touchAction: 'none',
   };
 
+  // Eraser: dynamic circle cursor; other tools: crosshair
+  const eraserCursor = useMemo(() => {
+    if (readOnly) return 'default';
+    if (drawing.style.tool === 'eraser') return makeEraserCursor(drawing.style.width);
+    return 'crosshair';
+  }, [readOnly, drawing.style.tool, drawing.style.width]);
+
   return (
     <Box sx={{ position: 'relative', width: '100%', height: '100%', bgcolor: '#ffffff' }}>
       {/* Static layer — committed strokes */}
       <canvas ref={staticRef} style={commonCanvasStyle} />
-      {/* Overlay layer — live preview, only interactive when not readOnly */}
+      {/* Overlay layer — live preview; accepts wheel events in all modes, pointer events only when interactive */}
       <canvas
         ref={overlayRef}
         style={{
           ...commonCanvasStyle,
-          cursor: readOnly ? 'default' : 'crosshair',
-          pointerEvents: readOnly ? 'none' : 'auto',
+          cursor: readOnly ? 'default' : eraserCursor,
         }}
         onPointerDown={readOnly ? undefined : drawing.onPointerDown}
         onPointerMove={readOnly ? undefined : drawing.onPointerMove}

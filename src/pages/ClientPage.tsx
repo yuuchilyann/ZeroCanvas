@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Box, Alert, Collapse } from '@mui/material';
+import { Box, Alert, Button, Collapse } from '@mui/material';
 import { PeerProvider, usePeerContext } from '../contexts/PeerContext';
 import { SyncService } from '../services/syncService';
 import DrawingCanvas from '../components/DrawingCanvas';
@@ -71,7 +71,15 @@ function ClientBoard({ roomId }: { roomId: string }) {
     <Box sx={{ width: '100vw', height: '100vh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
       {/* Connection banner */}
       <Collapse in={isDisconnected}>
-        <Alert severity="warning" sx={{ borderRadius: 0, py: 0.5 }}>
+        <Alert
+          severity="warning"
+          sx={{ borderRadius: 0, py: 0.5 }}
+          action={
+            <Button color="inherit" size="small" onClick={() => window.location.reload()}>
+              重新連線
+            </Button>
+          }
+        >
           {connectionState === 'error'
             ? `連線錯誤，正在重試...`
             : `與 ${roomId} 的連線中斷，正在重連...`}

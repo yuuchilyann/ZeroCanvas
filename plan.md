@@ -27,7 +27,8 @@
 | C. 同步協議設計 | ✅ 完成（含多 Client 互相同步）|
 | D. 顯示模式 Host/Client UI | ✅ 完成 |
 | Bug 修正（6 項） | ✅ 全部修正 |
-| E. UX 最佳化與部署 | ⏳ 待實作 |
+| E. UX 最佳化與部署 | ⏳ 部分完成（PWA Manifest、錯誤處理 UI）|
+| F. 功能增強與修正（5 項） | ✅ 完成（F1~F5 全部實作）|
 
 ---
 
@@ -146,13 +147,13 @@ type DrawMessage =
 
 ### 實作細節
 - [ ] **響應式 CSS**：平板橫向/縱向適配，工具列可收合
-- [ ] **PWA Manifest**：`public/manifest.json`，支援「加入主畫面」，standalone 模式（隱藏瀏覽器 UI）
+- [x] **PWA Manifest**：`public/manifest.json`，支援「加入主畫面」，standalone 模式（隱藏瀏覽器 UI）
 - [ ] **深色/淺色模式切換**：MUI `createTheme` + toggle button，白板背景可切換白/黑
-- [ ] **Vite base 設定**：`vite.config.ts` 設定 `base` 以支援子路徑部署
+- [x] **Vite base 設定**：`vite.config.ts` 設定 `base` 以支援子路徑部署
 - [ ] **GitHub Pages 部署**：`gh-pages` 套件 + `npm run deploy` 腳本
 - [ ] **Cloudflare Pages 部署**：`public/_redirects` 設定
 - [ ] **README.md**：使用說明、架構圖、部署步驟
-- [ ] **錯誤處理 UI**：連線失敗時顯示友善錯誤訊息與重試按鈕
+- [x] **錯誤處理 UI**：連線失敗時顯示友善錯誤訊息與重試按鈕
 - [ ] **複製 Room ID 按鈕**：一鍵複製連線網址到剪貼簿（QRCodeDisplay 已有，Host 頂部未加）
 
 ---
@@ -208,6 +209,72 @@ src/
 - DataChannel `reliable: true` 使用 SCTP，大型 snapshot（高解析度 canvas）可能需分片傳輸
 
 
+
+---
+
+## F. 功能增強與修正 ⏳
+
+**目的**：改善核心體驗，新增必要功能，使單人模式與課堂模式皆能順暢使用。
+
+### F1. QR Code 可收合至側邊
+
+**問題**：QR Code 固定顯示於 Host 畫面右下角，教師在課堂投影時學生可能擅自掃碼加入。
+
+**實作方向**：
+- [x] QR Code 預設**收合**為側邊小按鈕（如右側邊緣露出一個小 Tab/把手）
+- [x] 點擊 Tab 以 MUI `Drawer` 或 `Slide` 動畫展開 QR Code 面板
+- [x] 展開面板包含原有內容：QR Code、Room ID、複製按鈕
+- [x] 收合狀態時 Host 畫面完全乾淨，不洩漏 Room 資訊
+- [x] 涉及檔案：`src/pages/HostPage.tsx`、`src/components/QRCodeDisplay.tsx`
+
+### F2. 投影端（Host）加入繪圖工具
+
+**問題**：單人使用時，必須同時開啟兩個分頁（一個 Host 顯示、一個 Client 繪圖），體驗不佳。
+
+**實作方向**：
+- [x] Host 畫面新增可顯示/隱藏的 `Toolbar`，與 Client 端共用同一元件
+- [x] 預設**隱藏**工具列（投影展示模式不受干擾），透過浮動按鈕（如 MUI `Fab`）切換顯示
+- [x] 顯示工具列後，Host canvas 切換為可繪圖模式（`readOnly: false`）
+- [x] Host 本地繪圖事件同樣透過 SyncService 廣播給所有已連線 Client（雙向同步）
+- [x] 隱藏工具列後，自動回到唯讀展示模式，避免誤觸
+- [x] 涉及檔案：`src/pages/HostPage.tsx`、`src/components/DrawingCanvas.tsx`、`src/hooks/useDrawing.ts`
+
+### F3. 無邊際垂直延伸畫布（Infinite Vertical Canvas）
+
+**問題**：目前畫布固定為螢幕大小，書寫空間有限，無法如 Apple Freeform 般自由延伸。
+
+**實作方向**：
+- [x] 畫布邏輯高度改為**虛擬座標系統**，不再受限於螢幕可視區域
+- [x] 實作垂直滾動/平移：支援滑鼠滾輪、觸控拖曳（雙指平移）瀏覽已繪製區域
+- [x] 畫布在繪圖接近底部邊緣時自動向下延伸（或支援手動滾動到空白區域繼續繪製）
+- [x] 座標系統從目前的 `0~1 正規化` 改為**虛擬世界座標**（viewport + offset），同步協議傳送世界座標
+- [x] 同步協議需一併傳送 viewport 資訊，讓 Host/Client 能正確映射位置
+- [x] **水平方向暫不延伸**，但架構預留水平擴展能力（未來可能升級為真正的無限畫布）
+- [x] 涉及檔案：`src/hooks/useDrawing.ts`、`src/components/DrawingCanvas.tsx`、`src/types/drawing.ts`、`src/services/syncService.ts`
+
+### F4. 線段擦除模式（Stroke Eraser）
+
+**問題**：目前橡皮擦使用 `destination-out` compositing 逐像素擦除，無法整條線段移除，使用不直覺。
+
+**實作方向**：
+- [x] 繪圖引擎改為**保留所有筆跡物件**（Stroke Object Model），而非僅靠 canvas 像素
+- [x] 每條筆跡儲存為 `StrokeObject { id, tool, style, points[], deleted }` 結構
+- [x] 橡皮擦改為**線段擦除模式**：偵測擦除軌跡與哪些 StrokeObject 相交，將該整條筆跡標記為 `deleted`
+- [x] 每次有筆跡新增/刪除後，重新繪製（redraw）整個 canvas（從 StrokeObject 陣列重播）
+- [x] 同步協議擴充：新增 `stroke_delete { strokeId }` 訊息類型，通知其他端刪除對應筆跡
+- [x] 效能考量：筆跡數量多時可考慮分層快取或 dirty region 最佳化（後續迭代）
+- [x] 涉及檔案：`src/types/drawing.ts`、`src/hooks/useDrawing.ts`、`src/components/DrawingCanvas.tsx`、`src/services/syncService.ts`
+
+### F5. 橡皮擦游標反映擦除寬度
+
+**問題**：目前不論選什麼工具，游標皆為 `crosshair`，橡皮擦使用時無法直覺看出擦除範圍。
+
+**實作方向**：
+- [x] 橡皮擦啟用時，以**自訂 CSS cursor**（`cursor: url(...)` 或動態 canvas 產生的 Data URL）顯示圓圈游標
+- [x] 圓圈直徑 = 當前橡皮擦寬度（`drawStyle.width`），隨 Slider 調整即時更新
+- [x] 圓圈樣式：空心圓、半透明填充，讓使用者精確對位
+- [x] 非橡皮擦工具維持原有 `crosshair` 游標
+- [x] 涉及檔案：`src/components/DrawingCanvas.tsx`、`src/hooks/useDrawing.ts`
 
 ---
 
