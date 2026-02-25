@@ -949,9 +949,12 @@ export function useDrawing({ onStrokeMessage, staticCanvasRef }: UseDrawingOptio
       const rect = canvas?.getBoundingClientRect();
       const canvasW = rect?.width ?? 800;
       const canvasH = rect?.height ?? 600;
-      // 100% natural size: map image pixels to normalized canvas coordinates
-      const normW = el.naturalWidth / canvasW;
-      const normH = el.naturalHeight / canvasH;
+      // Divide by devicePixelRatio: clipboard tools (e.g. Snipping Tool) capture at
+      // physical pixels, but canvas CSS size is in logical pixels. Without this
+      // correction the image appears DPR× too large on high-DPI / 4K screens.
+      const dpr = window.devicePixelRatio || 1;
+      const normW = (el.naturalWidth / dpr) / canvasW;
+      const normH = (el.naturalHeight / dpr) / canvasH;
       const cx = 0.5 - normW / 2;
       const cy = viewportOffsetYRef.current + 0.5 - normH / 2;
       pendingImageRef.current = { id: nextImageId(), src: dataUrl, width: normW, height: normH, x: cx, y: cy, el };
