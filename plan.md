@@ -350,3 +350,35 @@ ResizeObserver 回呼改為三步驟：
 | `drawShape(ctx, style, start, end, canvas)` | 直接使用 start/end | 接受 `canvas` 參數，反正規化後繪製 |
 | `applyStrokeStyle` | `style.width` 直接作 lineWidth | `style.width × window.devicePixelRatio`，視覺粗細跨裝置一致 |
 | `applyMessage` snapshot | `drawImage(img, 0, 0)` | `drawImage(img, 0, 0, canvas.width, canvas.height)` 縮放至新尺寸 |
+
+---
+
+## 設計決策記錄
+
+### 不實作「多指同時繪製」
+
+**日期**：2026-02-25
+
+**決策**：刻意只允許單一指標（pointer）在同一時間繪圖，拒絕第二根手指的繪圖事件。
+
+**理由與考量**：
+
+1. **違反業界慣例與使用者直覺**
+   多指觸控在行動裝置上有明確的既定語意：
+   - **雙指** → 縮放（Pinch to zoom）或捲動（Pan）
+   - **三指** → 系統/App 手勢（iOS 多工、回上一頁等）
+   若允許多指繪圖，使用者在試圖捲動或縮放時會意外留下筆跡，造成困惑。
+
+2. **與「雙指捲動無邊際畫布」功能直接衝突**
+   ZeroCanvas 已實作雙指捲動（垂直無邊際畫布）。若同時支援雙指繪圖，兩種行為無法共存，必須犧牲其中一個。無邊際畫布的捲動對使用者更有價值。
+
+3. **業界主流繪圖 App 均不支援**
+   Procreate、Notability、GoodNotes、Apple Freeform 等專業繪圖應用，皆使用「單指/筆繪圖」+ 「多指手勢操作」的分工模式，不支援多指同時繪製。
+
+4. **技術實作成本高，收益低**
+   支援多指繪製需要將所有繪圖狀態（`currentPointsRef`、`pendingBatchRef`、`currentStrokeIdRef`、overlay 渲染）從單一變數改為 `Map<pointerId, ...>` 結構，重構量大且引入複雜度。相對地，真實使用場景中幾乎不會有人用多根手指在同一裝置同時繪圖。
+
+5. **協作需求已由 P2P 多裝置實現**
+   「多人同時繪製」的需求由多個裝置各自連線 Host 來滿足（N Clients → 1 Host），不需要在同一裝置上實現多指分工。
+
+**結論**：維持現有的 `activePointerIdRef` 單指鎖定設計，是正確且符合使用者期望的選擇。
