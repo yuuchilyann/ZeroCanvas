@@ -83,11 +83,12 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = ({
   }, [onClear]);
 
   // Prevent Safari/iPad from intercepting touch/pointer events as scroll gestures
+  // + two-finger touch scrolling for iPad/tablet
   useEffect(() => {
     const canvas = overlayRef.current;
     if (!canvas) return;
 
-    // Wheel event for vertical scrolling (all modes — host read-only can scroll too)
+    // Mouse wheel → vertical scroll (works on all modes)
     const handleWheel = (e: WheelEvent) => {
       e.preventDefault();
       const rect = canvas.getBoundingClientRect();
@@ -96,19 +97,50 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = ({
     };
     canvas.addEventListener('wheel', handleWheel, { passive: false });
 
-    if (readOnly) {
-      return () => {
-        canvas.removeEventListener('wheel', handleWheel);
-      };
-    }
+    // --- Two-finger touch scrolling (iPad / tablet) ---
+    let lastTouchY: number | null = null;
+    let isTwoFingerScroll = false;
 
-    const prevent = (e: Event) => e.preventDefault();
-    canvas.addEventListener('touchstart', prevent, { passive: false });
-    canvas.addEventListener('touchmove', prevent, { passive: false });
+    const handleTouchStart = (e: TouchEvent) => {
+      if (e.touches.length >= 2) {
+        e.preventDefault();
+        isTwoFingerScroll = true;
+        lastTouchY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+        // Cancel any ongoing single-finger drawing
+        if (!readOnly) drawingRef.current.onPointerCancel();
+      } else if (!readOnly) {
+        // Single touch in drawing mode: prevent browser scroll/zoom
+        e.preventDefault();
+      }
+    };
+
+    const handleTouchMove = (e: TouchEvent) => {
+      if (e.touches.length >= 2 && isTwoFingerScroll && lastTouchY !== null) {
+        e.preventDefault();
+        const currentY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+        const rect = canvas.getBoundingClientRect();
+        const delta = (lastTouchY - currentY) / (rect.height || 1);
+        drawingRef.current.scrollBy(delta);
+        lastTouchY = currentY;
+      } else if (!readOnly) {
+        e.preventDefault();
+      }
+    };
+
+    const handleTouchEnd = () => {
+      isTwoFingerScroll = false;
+      lastTouchY = null;
+    };
+
+    canvas.addEventListener('touchstart', handleTouchStart, { passive: false });
+    canvas.addEventListener('touchmove', handleTouchMove, { passive: false });
+    canvas.addEventListener('touchend', handleTouchEnd);
+
     return () => {
       canvas.removeEventListener('wheel', handleWheel);
-      canvas.removeEventListener('touchstart', prevent);
-      canvas.removeEventListener('touchmove', prevent);
+      canvas.removeEventListener('touchstart', handleTouchStart);
+      canvas.removeEventListener('touchmove', handleTouchMove);
+      canvas.removeEventListener('touchend', handleTouchEnd);
     };
   }, [readOnly]);
 
@@ -182,7 +214,6 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = ({
         onPointerMove={readOnly ? undefined : drawing.onPointerMove}
         onPointerUp={readOnly ? undefined : drawing.onPointerUp}
         onPointerCancel={readOnly ? undefined : drawing.onPointerCancel}
-        onPointerLeave={readOnly ? undefined : drawing.onPointerCancel}
       />
     </Box>
   );

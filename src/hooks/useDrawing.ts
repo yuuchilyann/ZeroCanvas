@@ -178,6 +178,7 @@ export function useDrawing({ onStrokeMessage, staticCanvasRef }: UseDrawingOptio
   const shapeStartRef = useRef<Point | null>(null);
   const shapeEndRef = useRef<Point | null>(null);
   const currentStrokeIdRef = useRef<string>('');
+  const activePointerIdRef = useRef<number | null>(null);
 
   // Stroke object store — shared across local and remote operations
   const strokesRef = useRef<StrokeObject[]>([]);
@@ -235,6 +236,9 @@ export function useDrawing({ onStrokeMessage, staticCanvasRef }: UseDrawingOptio
 
   const onPointerDown = useCallback(
     (e: React.PointerEvent<HTMLCanvasElement>) => {
+      // Only track one pointer — reject multi-touch
+      if (activePointerIdRef.current !== null && isDrawingRef.current) return;
+      activePointerIdRef.current = e.pointerId;
       e.currentTarget.setPointerCapture(e.pointerId);
       const rect = e.currentTarget.getBoundingClientRect();
       const point = getCanvasPoint(e.clientX, e.clientY, e.pressure, rect, viewportOffsetYRef.current);
@@ -262,6 +266,7 @@ export function useDrawing({ onStrokeMessage, staticCanvasRef }: UseDrawingOptio
   const onPointerMove = useCallback(
     (e: React.PointerEvent<HTMLCanvasElement>) => {
       if (!isDrawingRef.current) return;
+      if (e.pointerId !== activePointerIdRef.current) return;
       const tool = styleRef.current.tool;
       const canvas = e.currentTarget;
       const rect = canvas.getBoundingClientRect();
@@ -295,6 +300,7 @@ export function useDrawing({ onStrokeMessage, staticCanvasRef }: UseDrawingOptio
   );
 
   const onPointerCancel = useCallback(() => {
+    activePointerIdRef.current = null;
     isDrawingRef.current = false;
     currentPointsRef.current = [];
     pendingBatchRef.current = [];
@@ -310,7 +316,9 @@ export function useDrawing({ onStrokeMessage, staticCanvasRef }: UseDrawingOptio
   const onPointerUp = useCallback(
     (e: React.PointerEvent<HTMLCanvasElement>) => {
       if (!isDrawingRef.current) return;
+      if (e.pointerId !== activePointerIdRef.current) return;
       isDrawingRef.current = false;
+      activePointerIdRef.current = null;
       const rect = e.currentTarget.getBoundingClientRect();
       const point = getCanvasPoint(e.clientX, e.clientY, e.pressure, rect, viewportOffsetYRef.current);
       const tool = styleRef.current.tool;
