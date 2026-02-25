@@ -52,6 +52,10 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = ({
   };
   const drawing = useDrawing(drawingHookOptions);
 
+  // Stable ref so effects don't re-run on every style change
+  const drawingRef = useRef(drawing);
+  drawingRef.current = drawing;
+
   // Expose hook to parent on every render (parent stores in ref, no re-render loop)
   onDrawingHook?.(drawing);
 
@@ -59,9 +63,9 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = ({
   useEffect(() => {
     if (!onApplyMessage) return;
     onApplyMessage((msg: DrawMessage) => {
-      if (staticRef.current) drawing.applyMessage(msg, staticRef.current);
+      if (staticRef.current) drawingRef.current.applyMessage(msg, staticRef.current);
     });
-  }, [drawing, onApplyMessage]);
+  }, [onApplyMessage]);
 
   // Expose getDataUrl to parent
   useEffect(() => {
@@ -74,9 +78,9 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = ({
     if (!onClear) return;
     onClear(() => {
       if (staticRef.current && overlayRef.current)
-        drawing.clearCanvas(staticRef.current, overlayRef.current);
+        drawingRef.current.clearCanvas(staticRef.current, overlayRef.current);
     });
-  }, [drawing, onClear]);
+  }, [onClear]);
 
   // Prevent Safari/iPad from intercepting touch/pointer events as scroll gestures
   useEffect(() => {
@@ -86,10 +90,9 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = ({
     // Wheel event for vertical scrolling (all modes — host read-only can scroll too)
     const handleWheel = (e: WheelEvent) => {
       e.preventDefault();
-      // Convert pixel delta to world units (1.0 = one screen height)
       const rect = canvas.getBoundingClientRect();
       const delta = e.deltaY / (rect.height || 1);
-      drawing.scrollBy(delta);
+      drawingRef.current.scrollBy(delta);
     };
     canvas.addEventListener('wheel', handleWheel, { passive: false });
 
@@ -107,18 +110,18 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = ({
       canvas.removeEventListener('touchstart', prevent);
       canvas.removeEventListener('touchmove', prevent);
     };
-  }, [readOnly, drawing]);
+  }, [readOnly]);
 
   // Redraw static canvas from stroke objects when viewport scrolls
   const prevOffsetRef = useRef(drawing.viewportOffsetY);
   useEffect(() => {
     if (prevOffsetRef.current !== drawing.viewportOffsetY) {
       prevOffsetRef.current = drawing.viewportOffsetY;
-      if (staticRef.current) drawing.redrawStatic(staticRef.current);
+      if (staticRef.current) drawingRef.current.redrawStatic(staticRef.current);
     }
-  }, [drawing, drawing.viewportOffsetY]);
+  }, [drawing.viewportOffsetY]);
 
-  // Resize observer — resize canvases and redraw from stroke objects
+  // Resize observer — resize canvases and redraw from stroke objects (runs once)
   useEffect(() => {
     const obs = new ResizeObserver(() => {
       const staticCanvas = staticRef.current;
@@ -128,17 +131,17 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = ({
       if (overlayRef.current) resizeCanvas(overlayRef.current);
 
       // Redraw from stroke objects at current viewport
-      if (staticCanvas) drawing.redrawStatic(staticCanvas);
+      if (staticCanvas) drawingRef.current.redrawStatic(staticCanvas);
     });
     if (staticRef.current) obs.observe(staticRef.current);
     return () => obs.disconnect();
-  }, [drawing]);
+  }, []);
 
   // Animation loop for overlay
   const tick = useCallback(() => {
-    if (overlayRef.current) drawing.renderOverlay(overlayRef.current);
+    if (overlayRef.current) drawingRef.current.renderOverlay(overlayRef.current);
     rafRef.current = requestAnimationFrame(tick);
-  }, [drawing]);
+  }, []);
 
   useEffect(() => {
     rafRef.current = requestAnimationFrame(tick);
@@ -159,7 +162,8 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = ({
   // Eraser: dynamic circle cursor; other tools: crosshair
   const eraserCursor = useMemo(() => {
     if (readOnly) return 'default';
-    if (drawing.style.tool === 'eraser') return makeEraserCursor(drawing.style.width);
+    if (drawing.style.tool === 'eraser' || drawing.style.tool === 'pixel_eraser')
+      return makeEraserCursor(drawing.style.width);
     return 'crosshair';
   }, [readOnly, drawing.style.tool, drawing.style.width]);
 

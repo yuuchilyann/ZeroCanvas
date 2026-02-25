@@ -70,8 +70,13 @@ function getCanvasPoint(clientX: number, clientY: number, pressure: number, rect
 function applyStrokeStyle(ctx: CanvasRenderingContext2D, style: DrawStyle, pressure = 0.5) {
   const dpr = window.devicePixelRatio || 1;
   const width = style.width * dpr * (0.5 + pressure * 0.8);
-  ctx.globalCompositeOperation = 'source-over';
-  ctx.strokeStyle = style.color;
+  if (style.tool === 'pixel_eraser') {
+    ctx.globalCompositeOperation = 'destination-out';
+    ctx.strokeStyle = 'rgba(0,0,0,1)';
+  } else {
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.strokeStyle = style.color;
+  }
   ctx.lineWidth = width;
   ctx.lineCap = 'round';
   ctx.lineJoin = 'round';
@@ -389,7 +394,18 @@ export function useDrawing({ onStrokeMessage, staticCanvasRef }: UseDrawingOptio
 
       const pts = currentPointsRef.current;
       if (pts.length < 2) return;
-      applyStrokeStyle(ctx, styleRef.current, pts[pts.length - 1].pressure ?? 0.5);
+
+      if (tool === 'pixel_eraser') {
+        // Preview pixel eraser as semi-transparent indicator (actual erase on commit)
+        ctx.globalCompositeOperation = 'source-over';
+        ctx.strokeStyle = 'rgba(255, 0, 0, 0.3)';
+        const dpr = window.devicePixelRatio || 1;
+        ctx.lineWidth = styleRef.current.width * dpr;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+      } else {
+        applyStrokeStyle(ctx, styleRef.current, pts[pts.length - 1].pressure ?? 0.5);
+      }
       catmullRomPoint(ctx, pts, overlayCanvas, viewportOffsetYRef.current);
       ctx.stroke();
     },

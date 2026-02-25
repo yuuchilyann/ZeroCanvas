@@ -10,6 +10,7 @@ import {
 } from '@mui/material';
 import GestureIcon from '@mui/icons-material/Gesture';
 import AutoFixHighIcon from '@mui/icons-material/AutoFixHigh';
+import CleaningServicesIcon from '@mui/icons-material/CleaningServices';
 import HorizontalRuleIcon from '@mui/icons-material/HorizontalRule';
 import CropSquareIcon from '@mui/icons-material/CropSquare';
 import DeleteForeverIcon from '@mui/icons-material/DeleteForever';
@@ -70,8 +71,11 @@ const Toolbar: React.FC<ToolbarProps> = ({
         <Tooltip title="筆刷" placement={isVertical ? 'right' : 'bottom'}>
           <ToggleButton value="pen"><GestureIcon /></ToggleButton>
         </Tooltip>
-        <Tooltip title="橡皮擦" placement={isVertical ? 'right' : 'bottom'}>
+        <Tooltip title="線段橡皮擦" placement={isVertical ? 'right' : 'bottom'}>
           <ToggleButton value="eraser"><AutoFixHighIcon /></ToggleButton>
+        </Tooltip>
+        <Tooltip title="一般橡皮擦" placement={isVertical ? 'right' : 'bottom'}>
+          <ToggleButton value="pixel_eraser"><CleaningServicesIcon /></ToggleButton>
         </Tooltip>
         <Tooltip title="直線" placement={isVertical ? 'right' : 'bottom'}>
           <ToggleButton value="line"><HorizontalRuleIcon /></ToggleButton>
